@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::sync::mpsc::{Sender, Receiver, channel};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
 // args specific to process executor
@@ -10,8 +10,8 @@ struct ProcessArgs<'pa> {
 
 // commands sendable to process runner
 enum ProcessRunnerCmd {
-  NewCount(usize),
-  Slaughter(),
+    NewCount(usize),
+    Slaughter(),
 }
 
 fn main() {
@@ -58,24 +58,32 @@ fn main() {
 /*  TODO: this should maybe watch a config file for changes and listen for
  *  commands from the cluster control APIs?
  */
-fn t_process_controller( ctl_tx: Sender<ProcessRunnerCmd> ){
-    thread::sleep( std::time::Duration::from_secs(2) );
-    ctl_tx.send( ProcessRunnerCmd::NewCount(4) ).unwrap_or_else(|e| {
-      panic!("Failed to send message: {:?}", e);
-     });
-    thread::sleep( std::time::Duration::from_secs(2) );
-    ctl_tx.send( ProcessRunnerCmd::NewCount(6) ).unwrap_or_else(|e| {
-      panic!("Failed to send message: {:?}", e);
-     });
-    thread::sleep( std::time::Duration::from_secs(2) );
-    ctl_tx.send( ProcessRunnerCmd::NewCount(2) ).unwrap_or_else(|e| {
-      panic!("Failed to send message: {:?}", e);
-     });
-    thread::sleep( std::time::Duration::from_secs(2) );
-     ctl_tx.send( ProcessRunnerCmd::Slaughter() ).unwrap_or_else(|e| {
-      panic!("Failed to send message: {:?}", e);
-     });
-     println!("Exiting process controllers");
+fn t_process_controller(ctl_tx: Sender<ProcessRunnerCmd>) {
+    thread::sleep(std::time::Duration::from_secs(2));
+    ctl_tx
+        .send(ProcessRunnerCmd::NewCount(4))
+        .unwrap_or_else(|e| {
+            panic!("Failed to send message: {:?}", e);
+        });
+    thread::sleep(std::time::Duration::from_secs(2));
+    ctl_tx
+        .send(ProcessRunnerCmd::NewCount(6))
+        .unwrap_or_else(|e| {
+            panic!("Failed to send message: {:?}", e);
+        });
+    thread::sleep(std::time::Duration::from_secs(2));
+    ctl_tx
+        .send(ProcessRunnerCmd::NewCount(2))
+        .unwrap_or_else(|e| {
+            panic!("Failed to send message: {:?}", e);
+        });
+    thread::sleep(std::time::Duration::from_secs(2));
+    ctl_tx
+        .send(ProcessRunnerCmd::Slaughter())
+        .unwrap_or_else(|e| {
+            panic!("Failed to send message: {:?}", e);
+        });
+    println!("Exiting process controllers");
 }
 
 fn t_process_runner(initial_count: usize, ctl_rx: Receiver<ProcessRunnerCmd>, args: &ProcessArgs) {
@@ -92,33 +100,43 @@ fn t_process_runner(initial_count: usize, ctl_rx: Receiver<ProcessRunnerCmd>, ar
         // Hey Terry; are there any messages waiting for me?
         let msg = ctl_rx.try_recv();
         if !msg.is_err() {
-          // handle the message
-          match msg.unwrap(){
-            ProcessRunnerCmd::NewCount(c) => {
-              if c != count {
-                println!("Updating count to {} instances", c);
-                count = c;
-              }
-            },
-            ProcessRunnerCmd::Slaughter() => {
-              println!("killing everything");
-              count = 0;
-            },
-          };
+            // handle the message
+            match msg.unwrap() {
+                ProcessRunnerCmd::NewCount(c) => {
+                    if c != count {
+                        println!("Updating count to {} instances", c);
+                        count = c;
+                    }
+                }
+                ProcessRunnerCmd::Slaughter() => {
+                    println!("killing everything");
+                    count = 0;
+                }
+            };
         }
 
         // increase running instances as needed
         while running.len() < count {
             // there needs to be a way to get the places to run; add to launcher
             let kid = child_launcher(args);
-            println!("Spawned process {} ({}/{})", kid.id(), running.len()+1, count);
+            println!(
+                "Spawned process {} ({}/{})",
+                kid.id(),
+                running.len() + 1,
+                count
+            );
             running.push(kid);
         }
 
         // newest kids are on the right, so those are the ones to kill
         while running.len() > count {
             let mut kid = running.pop().unwrap();
-            println!("Killing process {} ({}/{})", kid.id(), running.len()+1, count);
+            println!(
+                "Killing process {} ({}/{})",
+                kid.id(),
+                running.len() + 1,
+                count
+            );
             kid.kill().expect("Command was already dead")
         }
 
@@ -150,9 +168,9 @@ fn t_process_runner(initial_count: usize, ctl_rx: Receiver<ProcessRunnerCmd>, ar
         }
 
         if count == 0 {
-          // exit thread after cleanup
-          println!("Exiting runner");
-          break;
+            // exit thread after cleanup
+            println!("Exiting runner");
+            break;
         }
 
         /* // this'd be great
